@@ -62,6 +62,12 @@ class ThreeLayerConvNet(object):
         # the start of the loss() function to see how that happens.                #
         ############################################################################
         # 
+        self.params[f'W1'] = np.random.normal(loc=0.0, scale=weight_scale, size=(num_filters, input_dim[0], filter_size, filter_size))
+        self.params[f'b1'] = np.zeros(num_filters)
+        self.params[f'W2'] = np.random.normal(loc=0.0, scale=weight_scale, size=(num_filters * (input_dim[1] // 2) * (input_dim[2] // 2), hidden_dim))
+        self.params[f'b2'] = np.zeros(hidden_dim)
+        self.params[f'W3'] = np.random.normal(loc=0.0, scale=weight_scale, size=(hidden_dim, num_classes))
+        self.params[f'b3'] = np.zeros(num_classes)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -97,6 +103,10 @@ class ThreeLayerConvNet(object):
         # cs231n/layer_utils.py in your implementation (already imported).         #
         ############################################################################
         # 
+        layer_caches = {}
+        out, layer_caches[0] = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
+        out, layer_caches[1] = affine_relu_forward(out, W2, b2)
+        scores, layer_caches[2] = affine_forward(out, W3, b3)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -116,6 +126,15 @@ class ThreeLayerConvNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # 
+        loss, dout = softmax_loss(scores, y)
+        loss +=  0.5 * self.reg * (np.sum(W1 ** 2) + np.sum(W2 ** 2) + np.sum(W3 ** 2))
+        dout, grads['W3'], grads['b3'] = affine_backward(dout, layer_caches[2])
+        dout, grads['W2'], grads['b2'] = affine_relu_backward(dout, layer_caches[1])
+        dx, grads['W1'], grads['b1'] = conv_relu_pool_backward(dout, layer_caches[0])
+
+        grads['W1'] += self.reg * W1
+        grads['W2'] += self.reg * W2
+        grads['W3'] += self.reg * W3
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################

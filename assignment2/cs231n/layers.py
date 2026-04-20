@@ -540,6 +540,27 @@ def conv_forward_naive(x, w, b, conv_param):
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
     # 
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+
+    stride, pad = conv_param['stride'], conv_param['pad']
+    H_out = int(1 + (H + 2 * pad - HH) / stride)
+    W_out = int(1 + (W + 2 * pad - WW) / stride)
+    out = np.zeros((N, F, H_out, W_out))
+
+    pad_width = ((0, 0), (0, 0), (pad, pad), (pad, pad))
+    x_pad = np.pad(x, pad_width, mode='constant')
+
+    for n in range(N):
+        for f in range(F):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start, h_end = i * stride, i * stride + HH
+                    w_start, w_end = j * stride, j * stride + WW
+
+                    x_slice = x_pad[n, :, h_start:h_end, w_start:w_end]
+
+                    out[n, f, i, j] = np.sum(x_slice * w[f]) + b[f]
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -564,6 +585,29 @@ def conv_backward_naive(dout, cache):
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
     # 
+    x, w, b, conv_param = cache
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    stride, pad = conv_param['stride'], conv_param['pad']
+
+    dx_pad = np.zeros((N, C, H + 2 * pad, W + 2 * pad))
+    dw = np.zeros_like(w)
+    db = np.sum(dout, axis=(0, 2, 3))
+
+    x_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
+    H_out, W_out = dout.shape[2], dout.shape[3]
+
+    for n in range(N):
+        for f in range(F):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start, h_end = i * stride, i * stride + HH
+                    w_start, w_end = j * stride, j * stride + WW
+
+                    dw[f] += x_pad[n, :, h_start:h_end, w_start:w_end] * dout[n, f, i, j]
+                    dx_pad[n, :, h_start:h_end, w_start:w_end] += w[f] * dout[n, f, i, j]
+
+    dx = dx_pad[:, :, pad:pad + H, pad:pad + W]
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -595,6 +639,22 @@ def max_pool_forward_naive(x, pool_param):
     # TODO: Implement the max-pooling forward pass                            #
     ###########################################################################
     # 
+    N, C, H, W = x.shape
+    stride, pool_height, pool_width = pool_param['stride'], pool_param['pool_height'], pool_param['pool_width']
+    H_out = int(1 + (H - pool_height) / stride)
+    W_out = int(1 + (W - pool_width) / stride)
+    out = np.zeros((N, C, H_out, W_out))
+
+    for n in range(N):
+        for c in range(C):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start, h_end = i * stride, i * stride + pool_height
+                    w_start, w_end = j * stride, j * stride + pool_width
+
+                    x_slice = x[n, c, h_start:h_end, w_start:w_end]
+
+                    out[n, c, i, j] = np.max(x_slice)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -617,6 +677,25 @@ def max_pool_backward_naive(dout, cache):
     # TODO: Implement the max-pooling backward pass                           #
     ###########################################################################
     # 
+    x, pool_param = cache
+    dx = np.zeros_like(x)
+    N, C, H, W = x.shape
+    stride, pool_height, pool_width = pool_param['stride'], pool_param['pool_height'], pool_param['pool_width']
+
+    H_out, W_out = dout.shape[2], dout.shape[3]
+
+    for n in range(N):
+        for c in range(C):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start, h_end = i * stride, i * stride + pool_height
+                    w_start, w_end = j * stride, j * stride + pool_width
+
+                    x_slice = x[n, c, h_start:h_end, w_start:w_end]
+                    max_idx = np.argmax(x_slice)
+                    h_max, w_max = np.unravel_index(max_idx, x_slice.shape)
+
+                    dx[n, c, h_start + h_max, w_start + w_max] += dout[n, c, i, j]
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -654,6 +733,11 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     # Your implementation should be very short; ours is less than five lines. #
     ###########################################################################
     # 
+    N, C, H, W = x.shape
+    x = np.transpose(x, (0, 2, 3, 1))
+    x_input = x.reshape(-1, C)
+    out, cache = batchnorm_forward(x_input, gamma, beta, bn_param)
+    out = out.reshape((N, H, W, C)).transpose(0, 3, 1, 2)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -683,6 +767,11 @@ def spatial_batchnorm_backward(dout, cache):
     # Your implementation should be very short; ours is less than five lines. #
     ###########################################################################
     # 
+    N, C, H, W = dout.shape
+    dout = np.transpose(dout, (0, 2, 3, 1))
+    dout = dout.reshape(-1, C)
+    dx, dgamma, dbeta = batchnorm_backward(dout, cache)
+    dx = dx.reshape((N, H, W, C)).transpose((0, 3, 1, 2))
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -720,6 +809,18 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     # and layer normalization!                                                #
     ###########################################################################
     # 
+    N, C, H, W = x.shape
+    x = x.reshape((N, G, C // G, H, W))
+
+    mean = x.mean(axis=(2, 3, 4), keepdims=True)
+    var = x.var(axis=(2, 3, 4), keepdims=True)
+
+    x_norm = (x - mean) / np.sqrt(var + eps)
+
+    x_norm = x_norm.reshape((N, C, H, W))
+    out = x_norm * gamma + beta
+
+    cache = (x, x_norm, beta, gamma, G, mean, var, eps)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -745,6 +846,21 @@ def spatial_groupnorm_backward(dout, cache):
     # This will be extremely similar to the layer norm implementation.        #
     ###########################################################################
     # 
+    x, x_norm, beta, gamma, G, mean, var, eps = cache
+    N, C, H, W = dout.shape
+
+    dgamma = (dout * x_norm).sum(axis=(0, 2, 3), keepdims=True)
+    dbeta = dout.sum(axis=(0, 2, 3), keepdims=True)
+
+    dx_norm = (dout * gamma).reshape((N, G, C // G, H, W))
+    x_norm_5d = x_norm.reshape(N, G, C // G, H, W)
+    M = C // G * H * W
+    dx = (1.0 / (M * np.sqrt(var + eps))) * (
+      (M * dx_norm)
+      - np.sum(dx_norm, axis=(2, 3, 4), keepdims=True)
+      - x_norm_5d * np.sum(dx_norm * x_norm_5d, axis=(2, 3, 4), keepdims=True)
+    )
+    dx = dx.reshape((N, C, H, W))
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
