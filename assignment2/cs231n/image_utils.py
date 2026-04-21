@@ -67,7 +67,7 @@ def image_from_url(url):
         _, fname = tempfile.mkstemp()
         with open(fname, "wb") as ff:
             ff.write(f.read())
-        img = imread(fname)
+        img = np.asarray(Image.open(fname).convert("RGB"))
         os.remove(fname)
         return img
     except urllib.error.URLError as e:

@@ -44,6 +44,7 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     # TODO: Implement a single forward step for the vanilla RNN.                 #
     ##############################################################################
     # 
+    next_h = torch.tanh(prev_h @ Wh + x @ Wx + b)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -74,6 +75,13 @@ def rnn_forward(x, h0, Wx, Wh, b):
     # above. You can use a for loop to help compute the forward pass.            #
     ##############################################################################
     # 
+    N, T, D = x.shape
+    prev_h = h0
+    h_list = []
+    for t in range(T):
+        prev_h = rnn_step_forward(x[:, t, :], prev_h, Wx, Wh, b)
+        h_list.append(prev_h)
+    h = torch.stack(h_list, dim=1)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -102,6 +110,7 @@ def word_embedding_forward(x, W):
     # HINT: This can be done in one line using Pytorch's array indexing.         #
     ##############################################################################
     # 
+    out = W[x]
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
